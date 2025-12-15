@@ -9,6 +9,7 @@ import { CalendarScreen } from '../screens/Customer/CalendarScreen';
 import { BillingScreen } from '../screens/Customer/BillingScreen';
 import { ProfileScreen } from '../screens/Customer/ProfileScreen';
 import { LoginScreen } from '../screens/Auth/LoginScreen';
+import { OTPScreen } from '../screens/Auth/OTPScreen';
 import { useAppContext } from '../context/AppContext';
 import { DashboardScreen } from '../screens/Admin/DashboardScreen';
 import { CustomersScreen } from '../screens/Admin/CustomersScreen';
@@ -97,7 +98,12 @@ export const RootNavigator = () => {
   return (
     <NavigationContainer theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isAuthenticated && <Stack.Screen name="Login" component={LoginScreen} />}
+        {!isAuthenticated && (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="OTP" component={OTPScreen} />
+          </>
+        )}
         {isAuthenticated && role === 'CUSTOMER' && <Stack.Screen name="Customer" component={CustomerTabs} />}
         {isAuthenticated && role === 'ADMIN' && <Stack.Screen name="Admin" component={AdminTabs} />}
       </Stack.Navigator>

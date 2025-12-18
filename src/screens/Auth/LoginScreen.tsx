@@ -9,12 +9,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { gql } from '@apollo/client';
+import { useMutation } from '@apollo/client/react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppContext } from '../../context/AppContext';
 import { BrandLogo } from '../../components/BrandLogo';
 import { colors } from '../../theme/colors';
 import { spacing, radius } from '../../theme/layout';
+import { showToast } from '../../utils/toast';
 
 const statusLegend = [
   { label: 'Active tiffins', color: colors.success },
@@ -22,16 +25,48 @@ const statusLegend = [
   { label: 'New sign-ups', color: colors.info },
 ];
 
+const REQUEST_OTP = gql`
+  mutation RequestOtp($phone: String!, $role: Role) {
+    requestOtp(phone: $phone, role: $role) {
+      success
+      message
+      otp
+    }
+  }
+`;
+
 export const LoginScreen = () => {
   const { login } = useAppContext();
   const navigation = useNavigation<any>();
   const [phone, setPhone] = useState('');
   const [loginAsAdmin, setLoginAsAdmin] = useState(false);
   const phoneValid = /^\d{10}$/.test(phone);
+  const [requestOtp, { loading }] = useMutation(REQUEST_OTP);
 
-  const handleContinue = () => {
-    if (!phoneValid) return;
-    navigation.navigate('OTP', { phone, role: loginAsAdmin ? 'ADMIN' : 'CUSTOMER' });
+  const handlePhoneChange = (value: string) => {
+    const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+    setPhone(digitsOnly);
+  };
+
+  const handleContinue = async () => {
+    if (!phoneValid) {
+      showToast('error', 'Enter a valid 10-digit phone');
+      return;
+    }
+
+    try {
+      const role = loginAsAdmin ? 'ADMIN' : 'CUSTOMER';
+      const { data } = await requestOtp({ variables: { phone, role } });
+      const result = data?.requestOtp;
+      if (!result?.success) {
+        showToast('error', result?.message || 'Unable to send OTP');
+        return;
+      }
+      showToast('success', result?.message || 'OTP sent');
+      navigation.navigate('OTP', { phone, role });
+    } catch (err: any) {
+      showToast('error', err?.message || 'Unable to send OTP');
+    }
   };
 
   return (
@@ -55,18 +90,18 @@ export const LoginScreen = () => {
                 </View>
               ))}
             </View>
-            </View>
+          </View>
 
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardEyebrow}>Welcome back</Text>
-                  <Text style={styles.cardTitle}>Sign in to continue</Text>
-                </View>
-                <View style={styles.stepPill}>
-                  <Text style={styles.stepText}>Step 1 · Access</Text>
-                </View>
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.cardEyebrow}>Welcome back</Text>
+                <Text style={styles.cardTitle}>Sign in to continue</Text>
               </View>
+              <View style={styles.stepPill}>
+                <Text style={styles.stepText}>Step 1 · Access</Text>
+              </View>
+            </View>
 
             <View style={styles.field}>
               <Text style={styles.label}>Phone number</Text>
@@ -74,7 +109,7 @@ export const LoginScreen = () => {
                 style={styles.input}
                 keyboardType="phone-pad"
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={handlePhoneChange}
                 placeholder="+91 90000 00000"
                 placeholderTextColor="#94A3B8"
                 maxLength={10}
@@ -96,13 +131,13 @@ export const LoginScreen = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.cta, !phoneValid && styles.ctaDisabled]}
+              style={[styles.cta, (!phoneValid || loading) && styles.ctaDisabled]}
               onPress={handleContinue}
-              activeOpacity={phoneValid ? 0.9 : 1}
-              disabled={!phoneValid}
+              activeOpacity={phoneValid && !loading ? 0.9 : 1}
+              disabled={!phoneValid || loading}
             >
               <Text style={styles.ctaText}>
-                Continue to OTP
+                {loading ? 'Sending OTP...' : 'Continue to OTP'}
               </Text>
             </TouchableOpacity>
 

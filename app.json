@@ -27,7 +27,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://dabbatrack-api.onrender.com"
+      "apiUrl": "https://dabbatrack-api.onrender.com/graphql"
     }
   }
 }

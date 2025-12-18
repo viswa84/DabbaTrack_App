@@ -1,4 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { gql } from '@apollo/client';
+import { useMutation } from '@apollo/client/react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,27 +16,58 @@ import { useAppContext } from '../../context/AppContext';
 import { BrandLogo } from '../../components/BrandLogo';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/layout';
+import { showToast } from '../../utils/toast';
 
 type Role = 'CUSTOMER' | 'ADMIN';
+
+const LOGIN_MUTATION = gql`
+  mutation Login($phone: String!, $otp: String!,$role: Role) {
+    login(phone: $phone, otp: $otp,role: $role) {
+      message
+      token
+      user {
+        id
+        name
+        phone
+        description
+      }
+    }
+  }
+`;
 
 export const OTPScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { login } = useAppContext();
+  const { loginWithToken } = useAppContext();
   const phone: string = route?.params?.phone || '';
   const role: Role = route?.params?.role || 'CUSTOMER';
 
   const [digits, setDigits] = useState(['', '', '', '']);
   const inputs = useRef<Array<TextInput | null>>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [runLogin, { loading, error: loginError, data }] = useMutation(LOGIN_MUTATION);
 
   const otpValue = useMemo(() => digits.join(''), [digits]);
   const isComplete = otpValue.length === 4;
+  const canSubmit = isComplete && !loading;
+
+  useEffect(() => {
+    console.log('OTP state', { loading, loginError: loginError?.message, data, otpValue, errorMessage });
+  }, [loading, loginError, data, otpValue, errorMessage]);
+
+  useEffect(() => {
+    if (!phone) {
+      navigation.goBack();
+    }
+  }, [navigation, phone]);
 
   const handleChange = (index: number, value: string) => {
     const val = value.slice(-1).replace(/\D/g, '');
     const nextDigits = [...digits];
     nextDigits[index] = val;
     setDigits(nextDigits);
+    setErrorMessage(null);
 
     if (val && index < inputs.current.length - 1) {
       inputs.current[index + 1]?.focus();
@@ -48,8 +81,26 @@ export const OTPScreen = () => {
   };
 
   const handleSubmit = () => {
-    if (!isComplete) return;
-    login(role);
+    if (!canSubmit) return;
+    setErrorMessage(null);
+    console.log( { phone, otp: otpValue,role }, "055555555555555555");
+    runLogin({ variables: { phone, otp: otpValue,role } })
+      .then(async ({ data }) => {
+        console.log('OTP success', data);
+        const token = data?.login?.token;
+        if (!token) {
+          setErrorMessage('Login failed. Please try again.');
+          return;
+        }
+        await loginWithToken({ token, role, user: data?.login?.user });
+        showToast('success', 'Login successful', 'Welcome back to DabbaTrack');
+      })
+      .catch((err) => {
+        console.log('OTP error', err);
+        const message = err?.message || 'Unable to verify code. Please try again.';
+        setErrorMessage(message);
+        showToast('error', 'Verification failed', message);
+      });
   };
 
   return (
@@ -100,12 +151,12 @@ export const OTPScreen = () => {
             </View>
 
             <TouchableOpacity
-              style={[styles.cta, !isComplete && styles.ctaDisabled]}
+              style={[styles.cta, !canSubmit && styles.ctaDisabled]}
               onPress={handleSubmit}
-              activeOpacity={isComplete ? 0.9 : 1}
-              disabled={!isComplete}
+              activeOpacity={canSubmit ? 0.9 : 1}
+              disabled={!canSubmit}
             >
-              <Text style={styles.ctaText}>Verify & continue</Text>
+              <Text style={styles.ctaText}>{loading ? 'Verifying...' : 'Verify & continue'}</Text>
             </TouchableOpacity>
 
             <View style={styles.resendRow}>
@@ -114,6 +165,7 @@ export const OTPScreen = () => {
                 <Text style={styles.resendLink}>Resend</Text>
               </TouchableOpacity>
             </View>
+            {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
           </View>
         </View>
       </LinearGradient>
@@ -198,4 +250,9 @@ const styles = StyleSheet.create({
   },
   resendText: { color: colors.textSecondary, fontSize: 12 },
   resendLink: { color: colors.brandPrimary, fontSize: 12, fontWeight: '700' },
+  errorText: {
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
 });
